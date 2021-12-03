@@ -2,8 +2,57 @@ import struct
 import time
 import can
 
-class bms12(object):
-    def __init__(self, unit, shuntmv=0, canbus=None):
+class BMS12(object):
+    """Zeva BMS12 Communications Library.
+
+    This class provides an abstraction of the Zeva BMS-12 CAN protocol. An
+    instance of the class represents one Zeva BMS-12 unit on the bus.
+
+    This class provides many methods, but only a few are needed to get updates
+    from the BMS hardware. Here is a typical example:
+
+    ::
+
+        # initialize a CAN bus
+        bus = can.interface.Bus(...)
+
+        # create a bms12 unit
+        unit1 = BMS12(1, shuntmv=3800, canbus=bus)
+
+        # check if unit is present
+        if not unit1.probe():
+            # process error
+
+        # update the voltage readings
+        unit1.update()
+
+        # read a cell voltage (in millivolts)
+        cell1 = unit1.cellmv[1]
+
+        # change the shunt voltage
+        unit1.shuntmv = 3700 # change to 3.7 V
+
+        # need to run update in order for new value to take effect
+        unit1.update()  # will also update voltage readings
+
+    """
+
+    def __init__(self, unit: int, shuntmv: int=0, canbus=None):
+        """Create a new bms12 instance.
+
+        :param unit: the unit number (0-15)
+        :param shuntmv: the initial shunt voltage in millivolts
+        :param canbus: a :meth:`can.interface.Bus` object from the ``can`` module
+
+        If ``shuntmv`` is 0 or not specied, then shunting is disabled. The
+        shunt level can be changed at any time using the property
+        :meth:`shuntmv`.
+
+        The ``canbus`` does not need to be specified to create the object, but
+        it must be set using the property :meth:`canbus` before any operations
+        can be performed.
+
+        """
         self._unit = unit
         self._shuntlvl = shuntmv
         self._bus = canbus
@@ -11,31 +60,49 @@ class bms12(object):
         self._temps = [0, 0]
 
     @property
-    def unit(self):
+    def unit(self) -> int:
+        """Get the unit number."""
         return self._unit
 
     @property
-    def shuntmv(self):
+    def shuntmv(self) -> int:
+        """Get the current shunt level, in millivolts."""
         return self._shuntlvl
 
     @shuntmv.setter
-    def shuntmv(self, mv):
+    def shuntmv(self, mv: int):
+        """Set a new shunt level, in millivolts.
+
+        You need to update the BMS unit by using :meth:`send_query()` before
+        the new setting will take effect.
+
+        """
         self._shuntlvl = mv
 
     @property
     def canbus(self):
+        """Get the current CAN bus object."""
         return self._bus
 
     @canbus.setter
     def canbus(self, bus):
+        """Set a new CAN bus object to use for communication."""
         self._bus = bus
 
     @property
     def cellmv(self):
+        """Get the list of 12 cell voltages, in millivolts.
+
+        You can add an index to get the value for a specific cell. For example
+        ``bmsunit.cellmv[2]``, to get the third cell value. Valid indexes are
+        0-11.
+
+        """
         return self._cellmv
 
     @property
     def temperature(self):
+        """Get the list of two temperatures, in C."""
         return self._temps
 
     def send_query(self):
@@ -43,9 +110,6 @@ class bms12(object):
 
         Sends the query message to the unit. This also sets the shunt level.
         The shunt level should already be set using the `shuntmv` property.
-
-        This function provides a brief delay after sending the message, then
-        returns.
 
         """
         arbid = 300 + (self._unit * 10)
@@ -196,40 +260,3 @@ class bms12(object):
         msgs = self.get_msgs()
         for msg in msgs:
             self.decode_msg(msg)
-
-print("Initializing CAN bus")
-bus = can.interface.Bus(bustype="socketcan", channel="can0", bitrate=250000)
-
-units = []
-for unit in range(16):
-    print(f"Probing unit {unit} ... ", end="")
-    bmsunit = bms12(unit=unit, canbus=bus)
-    if bmsunit.probe():
-        print("Ok")
-        units += [bmsunit]
-    else:
-        print()
-
-for unit in units:
-    unit.update()
-    print(f"[{unit.unit:2d}] ", end="")
-    for mv in unit.cellmv:
-        print(f"{mv:5d} ", end="")
-    print()
-
-"""
-msg = can.Message(arbitration_id=310, is_extended_id=True, data=bytearray([0, 0]))
-bus.send(msg)
-time.sleep(1)
-donext = True
-while donext:
-    msg = bus.recv(timeout=2)
-    if msg:
-        print(msg)
-        cells = msg.data
-        for idx in range(0, msg.dlc, 2):
-            mv = cells[idx] * 256 + cells[idx+1]
-            print(f"[{int(idx/2)}] {mv}")
-    else:
-        donext = False
-"""
