@@ -2,9 +2,9 @@
 
 *.c text
 *.h text
-*.py text
+*.py text diff=python
 
 *.json text
 
-*.md text
+*.md text diff=markdown
 *.txt text
