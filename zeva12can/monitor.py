@@ -11,7 +11,9 @@ def cli():
         print(f"Probing unit {unit} ... ", end="")
         bmsunit = zeva12can.BMS12(unit=unit, canbus=bus)
         if bmsunit.probe():
-            print("Ok")
+            ver = bmsunit.get_version()
+            verstr = ".".join(map(str, ver))
+            print(verstr)
             units += [bmsunit]
         else:
             print()
@@ -21,6 +23,9 @@ def cli():
         print(f"[{unit.unit:2d}] ", end="")
         for mv in unit.cellmv:
             print(f"{mv:5d} ", end="")
+        print(" | ", end="")
+        for temp in unit.temperature:
+            print(f"{temp:3d} ", end="")
         print()
 
 

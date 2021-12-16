@@ -8,6 +8,7 @@ setup(
     install_requires = ['python-can'],
     entry_points = {
         "console_scripts": [
-            "monitor=zeva12can.monitor:cli"]
+            "monitor=zeva12can.monitor:cli",
+            "reboot=zeva12can.reboot:cli"]
     }
 )

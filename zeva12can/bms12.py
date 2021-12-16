@@ -135,6 +135,37 @@ class BMS12(object):
                 break
         return msgs
 
+    def send_cmd(self, cmdid, cmddata=[]):
+        """Send a command to the BMS device, using cmd/resp protocol.
+
+        Sends the command, identified by "cmdid" along with any command data
+        bytes to the remote unit.
+
+        """
+        arbid = 300 + (self._unit * 10) + 5  # command message
+        payload = bytes([cmdid]) + bytes(cmddata)
+        msg = can.Message(arbitration_id=arbid, is_extended_id=True, data=payload)
+        self._bus.send(msg)
+
+    def get_resp(self):
+        """Get response to a command.
+
+        This function will wait for a response message. It should be used
+        after "send_cmd()" to retrieve the expected response. It returns a
+        bytes-like containing the response msg. The first byte is the response
+        type.
+
+        """
+        msgs = self.get_msgs()
+        for msg in msgs:
+            arbid = msg.arbitration_id
+            unit = self.unit_from_arbid(arbid)
+            if unit != self._unit:
+                return bytes([])
+            msgtype = self.type_from_arbid(arbid)
+            if msgtype == 6:
+                return msg.data
+
     @staticmethod
     def unit_from_arbid(arbid):
         """Decode the unit number from an abritration ID.
@@ -144,7 +175,7 @@ class BMS12(object):
 
         """
         # valid range to get a reasonable unit number
-        if arbid < 300 or arbid > 454:
+        if arbid < 300 or arbid > 456:
             return None
         arbid -= 300
         arbid = int(arbid / 10)
@@ -159,7 +190,7 @@ class BMS12(object):
 
         """
         # valid range to get a reasonable unit number
-        if arbid < 300 or arbid > 454:
+        if arbid < 300 or arbid > 456:
             return None
         return int(arbid % 10)
 
@@ -230,8 +261,8 @@ class BMS12(object):
                     self._cellmv[offset + idx] = mv[idx]
 
         elif msgtype == 4:
-            if msg.dlc == 2:
-                temps = self.decode_temp(msg.data)
+            if msg.dlc == 8:
+                temps = self.decode_temp(msg.data[:2])
                 self._temps[0] = temps[0]
                 self._temps[1] = temps[1]
 
@@ -260,3 +291,24 @@ class BMS12(object):
         msgs = self.get_msgs()
         for msg in msgs:
             self.decode_msg(msg)
+
+    def reboot(self):
+        """Send reboot command and wait for response.
+
+        Return True if the expected response is received, False otherwise.
+
+        """
+        self.send_cmd(0)
+        resp = self.get_resp()
+        if resp:
+            if resp[0] == 0:
+                return True
+        return False
+
+    def get_version(self):
+        self.send_cmd(1)
+        resp = self.get_resp()
+        if resp:
+            if resp[0] == 1:
+                return resp[1:]
+        return []
