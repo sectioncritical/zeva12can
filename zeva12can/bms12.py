@@ -58,6 +58,7 @@ class BMS12(object):
         self._bus = canbus
         self._cellmv = [0] * 12
         self._temps = [0, 0]
+        self._ver = [0, 0, 0]
 
     @property
     def unit(self) -> int:
@@ -105,6 +106,11 @@ class BMS12(object):
         """Get the list of two temperatures, in C."""
         return self._temps
 
+    @property
+    def version(self):
+        """Get the firmware version."""
+        return self._ver
+
     def send_query(self):
         """Send query packet with shunt level to unit.
 
@@ -114,6 +120,13 @@ class BMS12(object):
         """
         arbid = 300 + (self._unit * 10)
         payload = struct.pack(">H", self._shuntlvl)
+        msg = can.Message(arbitration_id=arbid, is_extended_id=True, data=payload)
+        self._bus.send(msg)
+
+    def send_version_cmd(self):
+        """Send command to request firmware version."""
+        arbid = 300 + (self._unit * 10) + 5
+        payload = struct.pack("BBBBBBBB", 1, 0, 0, 0, 0, 0, 0, 0)
         msg = can.Message(arbitration_id=arbid, is_extended_id=True, data=payload)
         self._bus.send(msg)
 
@@ -235,18 +248,28 @@ class BMS12(object):
                 self._temps[0] = temps[0]
                 self._temps[1] = temps[1]
 
+        elif msgtype == 6:
+            if msg.data[0] == 1:
+                self._ver[0] = msg.data[1]
+                self._ver[1] = msg.data[2]
+                self._ver[2] = msg.data[3]
+
     def probe(self):
         """Determine if unit is present on the CAN bus.
 
         The CAN bus object must already be set with the `canbus` property.
-        This function sends a query message on the bus to this unit and checks
-        for an expected response. It returns ``True`` if the unit is present,
-        otherwise ``False``.
+        This function sends a version request command and checks for an
+        expected response. If there is a response it is decoded into firmware
+        version and the value returned. Otherwise the function returns
+        ``None``.
 
         """
-        self.send_query()
+        self.send_version_cmd()
         msgs = self.get_msgs()
-        return len(msgs) > 0
+        if len(msgs) > 0:
+            self.decode_msg(msgs[0])
+            return self.version
+        return None
 
     def update(self):
         """Query the unit on the bus and update values.

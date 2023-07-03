@@ -10,8 +10,9 @@ def cli():
     for unit in range(16):
         print(f"Probing unit {unit} ... ", end="")
         bmsunit = zeva12can.BMS12(unit=unit, canbus=bus)
-        if bmsunit.probe():
-            print("Ok")
+        ver = bmsunit.probe()
+        if ver:
+            print(f"{ver[0]}.{ver[1]}.{ver[2]}")
             units += [bmsunit]
         else:
             print()
